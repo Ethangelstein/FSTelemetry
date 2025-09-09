@@ -14,14 +14,22 @@
 // === Parámetros LoRa (deben coincidir con el emisor) ===
 #define RF_FREQUENCY      915E6      // 915 MHz
 #define BANDWIDTH         125E3      // 125 kHz
-#define SPREADING_FACTOR  8         // SF12
+#define SPREADING_FACTOR  10        // SF10 (era 8) - +6dB ganancia
 #define CODING_RATE       5          // 4/5
 #define PREAMBLE_LENGTH   8
 #define SYNC_WORD         0x34       // público (mismo que el emisor)
+#define TX_POWER          20         // Máxima potencia permitida (20dBm)
 // IQ inversion: OFF (por defecto en la librería Arduino LoRa)
 
 unsigned long startTime = 0;
 unsigned long packetCount = 0;
+// Estadísticas para monitoreo de calidad
+float rssiSum = 0;
+float snrSum = 0;
+float minRssi = 0;
+float maxRssi = -200;
+float minSnr = 100;
+float maxSnr = -100;
 
 void setup() {
   Serial.begin(115200);
@@ -42,10 +50,11 @@ void setup() {
 
   // ==== AJUSTES QUE DEBEN COINCIDIR ====
   LoRa.setSignalBandwidth(BANDWIDTH);     // 125 kHz
-  LoRa.setSpreadingFactor(SPREADING_FACTOR); // SF12
+  LoRa.setSpreadingFactor(SPREADING_FACTOR); // SF10 para mejor sensibilidad
   LoRa.setCodingRate4(CODING_RATE);       // 4/5
   LoRa.setPreambleLength(PREAMBLE_LENGTH);// 8
   LoRa.setSyncWord(SYNC_WORD);            // 0x34
+  LoRa.setTxPower(TX_POWER);              // 20 dBm máxima potencia
   LoRa.enableCrc();                       // CRC ON (¡importante!)
   // Header explícito por defecto (equivale a payload variable)
 
@@ -55,6 +64,7 @@ void setup() {
 
 void loop() {
   int packetSize = LoRa.parsePacket(); // explícito (header) por defecto
+
   if (packetSize) {
     String receivedText;
     byte rawData[256];
@@ -94,6 +104,23 @@ void loop() {
 
     Serial.print("RSSI: "); Serial.print(rssi); Serial.println(" dBm");
     Serial.print("SNR: "); Serial.println(snr);
+    
+    // Actualizar estadísticas
+    rssiSum += rssi;
+    snrSum += snr;
+    if (rssi < minRssi) minRssi = rssi;
+    if (rssi > maxRssi) maxRssi = rssi;
+    if (snr < minSnr) minSnr = snr;
+    if (snr > maxSnr) maxSnr = snr;
+    
+    // Mostrar promedios cada 10 paquetes
+    if (packetCount % 10 == 0) {
+      Serial.print(">>> Estadísticas (últimos "); Serial.print(packetCount); Serial.println(" paquetes):");
+      Serial.print("RSSI promedio: "); Serial.print(rssiSum/packetCount); Serial.println(" dBm");
+      Serial.print("SNR promedio: "); Serial.println(snrSum/packetCount);
+      Serial.print("RSSI rango: "); Serial.print(minRssi); Serial.print(" a "); Serial.print(maxRssi); Serial.println(" dBm");
+      Serial.print("SNR rango: "); Serial.print(minSnr); Serial.print(" a "); Serial.println(maxSnr);
+    }
 
     Serial.print("Tiempo desde inicio: ");
     if (h < 10) Serial.print("0"); Serial.print(h); Serial.print(":");

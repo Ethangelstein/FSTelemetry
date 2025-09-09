@@ -41,13 +41,13 @@ void setup() {
   RadioEvents.TxTimeout = OnTxTimeout;
   Radio.Init(&RadioEvents);
 
-      // Asegurar sync-word "público" = 0x34 e IQ normal
-    Radio.SetPublicNetwork(true);          // => sync-word 0x34
-    Radio.SetRxConfig(                     // aunque no recibas, fija defaults compatibles
-      MODEM_LORA, 0, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
-      0, LORA_CODINGRATE, LORA_PREAMBLE_LENGTH,
-      LORA_FIX_LENGTH_PAYLOAD_ON, 0, true, 0, 0, LORA_IQ_INVERSION_ON, true
-    );
+  // Asegurar sync-word "público" = 0x34 e IQ normal
+  Radio.SetPublicNetwork(true);          // => sync-word 0x34
+  Radio.SetRxConfig(                     // aunque no recibas, fija defaults compatibles
+    MODEM_LORA, 0, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
+    0, LORA_CODINGRATE, LORA_PREAMBLE_LENGTH,
+    LORA_FIX_LENGTH_PAYLOAD_ON, 0, true, 0, 0, LORA_IQ_INVERSION_ON, true
+  );
 
 
   Radio.SetChannel(RF_FREQUENCY);
