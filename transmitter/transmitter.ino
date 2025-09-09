@@ -1,6 +1,18 @@
 #include "LoRaWan_APP.h"
 #include "Arduino.h"
 #include "HT_st7735.h"  // Librería del display
+#include <ArduinoJson.h>
+
+// === TELEMETRY DATA STRUCTURE ===
+struct TelemetryData {
+  String id;               // Vehicle/Device ID
+  unsigned long timestamp; // Unix timestamp
+  float gps[3];           // GPS: [latitude, longitude, altitude]
+  int rpm;                // Engine RPM
+  int accelerometer[3];   // Accelerometer: [x, y, z]
+  int voltage;            // Battery voltage (mV)
+  int current;            // Current consumption (mA)
+};
 
 // === CONFIGURACIÓN LORA ===
 #define RF_FREQUENCY            915000000 // Hz
@@ -26,11 +38,17 @@ HT_st7735 st7735;  // Instancia del display
 
 static RadioEvents_t RadioEvents;
 
+// === FUNCTION DECLARATIONS ===
 void OnTxDone(void);
 void OnTxTimeout(void);
+TelemetryData generateRandomTelemetry(void);
+String serializeTelemetryToJson(const TelemetryData& data);
 
 void setup() {
   Serial.begin(115200);
+
+  // Initialize random seed
+  randomSeed(analogRead(0));
 
   // Inicialización placa y pantalla
   Mcu.begin(HELTEC_BOARD, SLOW_CLK_TPYE);
@@ -77,43 +95,129 @@ void loop() {
     previousMillis = currentMillis;
     packetCount++;
 
-    // Crear y enviar paquete
-    char txpacket[32];
-    sprintf(txpacket, "Paquete #%lu", packetCount);
-    Radio.Send((uint8_t *)txpacket, strlen(txpacket));
+    // Generate random telemetry data
+    TelemetryData telemetry = generateRandomTelemetry();
+    
+    // Serialize to JSON
+    String jsonPayload = serializeTelemetryToJson(telemetry);
+    
+    // Send LoRa packet
+    Radio.Send((uint8_t *)jsonPayload.c_str(), jsonPayload.length());
 
-    // Actualizar display
-    updateDisplay();
+    // Update display with telemetry info
+    updateDisplay(telemetry);
+    
+    // Print to serial for debugging
+    Serial.print("Sent packet #");
+    Serial.print(packetCount);
+    Serial.print(": ");
+    Serial.println(jsonPayload);
   }
 
   Radio.IrqProcess();
 }
 
-void updateDisplay() {
-  st7735.st7735_fill_screen(ST7735_BLACK);  // Limpiar pantalla
+void updateDisplay(const TelemetryData& telemetry) {
+  st7735.st7735_fill_screen(ST7735_BLACK);  // Clear screen
 
-  // Línea 1: Frecuencia
   char buffer[32];
-  sprintf(buffer, "Frecuencia: %lu MHz", RF_FREQUENCY / 1000000);
+  
+  // Line 1: Vehicle ID and packet count
+  sprintf(buffer, "ID:%s #%lu", telemetry.id.c_str(), packetCount);
   st7735.st7735_write_str(0, 0, buffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
 
-  // Línea 2: Cantidad de paquetes
-  sprintf(buffer, "Paquetes: %06lu", packetCount);
-  st7735.st7735_write_str(0, 20, buffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
+  // Line 2: GPS coordinates
+  sprintf(buffer, "GPS:%.2f,%.2f", telemetry.gps[0], telemetry.gps[1]);
+  st7735.st7735_write_str(0, 15, buffer, Font_7x10, ST7735_CYAN, ST7735_BLACK);
 
-  // Línea 3: Tiempo transcurrido
+  // Line 3: RPM and altitude
+  sprintf(buffer, "RPM:%d ALT:%.1fm", telemetry.rpm, telemetry.gps[2]);
+  st7735.st7735_write_str(0, 30, buffer, Font_7x10, ST7735_GREEN, ST7735_BLACK);
+
+  // Line 4: Accelerometer
+  sprintf(buffer, "ACC:%d,%d,%d", telemetry.accelerometer[0], telemetry.accelerometer[1], telemetry.accelerometer[2]);
+  st7735.st7735_write_str(0, 45, buffer, Font_7x10, ST7735_YELLOW, ST7735_BLACK);
+
+  // Line 5: Voltage and Current
+  sprintf(buffer, "V:%dmV I:%dmA", telemetry.voltage, telemetry.current);
+  st7735.st7735_write_str(0, 60, buffer, Font_7x10, ST7735_RED, ST7735_BLACK);
+
+  // Line 6: Uptime
   unsigned long elapsed = (millis() - startTime) / 1000;
-  int horas = elapsed / 3600;
-  int minutos = (elapsed % 3600) / 60;
-  int segundos = elapsed % 60;
-  sprintf(buffer, "Tiempo: %02d:%02d:%02d", horas, minutos, segundos);
-  st7735.st7735_write_str(0, 40, buffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
+  int hours = elapsed / 3600;
+  int minutes = (elapsed % 3600) / 60;
+  int seconds = elapsed % 60;
+  sprintf(buffer, "UP:%02d:%02d:%02d", hours, minutes, seconds);
+  st7735.st7735_write_str(0, 75, buffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
+}
+
+// === TELEMETRY FUNCTIONS ===
+TelemetryData generateRandomTelemetry() {
+  TelemetryData data;
+  
+  // Vehicle ID (example format)
+  data.id = "trk1";
+  
+  // Current timestamp (millis since boot)
+  data.timestamp = millis() / 1000; // Convert to seconds
+  
+  // GPS coordinates (Buenos Aires area with random variation)
+  data.gps[0] = -34.6037 + (random(-1000, 1000) / 10000.0); // Latitude ±0.1°
+  data.gps[1] = -58.3816 + (random(-1000, 1000) / 10000.0); // Longitude ±0.1°
+  data.gps[2] = 25.0 + (random(-50, 200) / 10.0);           // Altitude 20-45m
+
+  // Engine RPM (800-6000 RPM typical range)
+  data.rpm = random(800, 6000);
+  
+  // Accelerometer values (-200 to +200 for normal driving)
+  data.accelerometer[0] = random(-200, 200); // X-axis
+  data.accelerometer[1] = random(-200, 200); // Y-axis  
+  data.accelerometer[2] = random(950, 1050); // Z-axis (gravity ~1000mg)
+  
+  // Battery voltage (11000-14000 mV for 12V system)
+  data.voltage = random(11000, 14000);
+  
+  // Current consumption (100-2000 mA typical)
+  data.current = random(100, 2000);
+  
+  return data;
+}
+
+String serializeTelemetryToJson(const TelemetryData& data) {
+  // Create JSON document
+  DynamicJsonDocument doc(512);
+  
+  doc["id"] = data.id;
+  doc["t"] = data.timestamp;
+  
+  // GPS array
+  JsonArray gpsArray = doc.createNestedArray("g");
+  gpsArray.add(data.gps[0]);
+  gpsArray.add(data.gps[1]);
+  gpsArray.add(data.gps[2]);
+  
+  doc["r"] = data.rpm;
+  
+  // Accelerometer array
+  JsonArray accArray = doc.createNestedArray("a");
+  accArray.add(data.accelerometer[0]);
+  accArray.add(data.accelerometer[1]);
+  accArray.add(data.accelerometer[2]);
+  
+  doc["v"] = data.voltage;
+  doc["c"] = data.current;
+  
+  // Serialize to string
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  return jsonString;
 }
 
 void OnTxDone(void) {
-  Serial.println("Paquete enviado.");
+  Serial.println("Telemetry packet sent successfully.");
 }
 
 void OnTxTimeout(void) {
-  Serial.println("Error de transmisión.");
+  Serial.println("Transmission timeout error.");
 }
