@@ -1,7 +1,7 @@
 package protocol
 
 const (
-	FrameSize = 58
+	FrameSize = 60
 	Magic0    = 'T'
 	Magic1    = 'D'
 )

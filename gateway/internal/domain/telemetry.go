@@ -2,6 +2,8 @@ package domain
 
 type Telemetry struct {
 	ID          string
+	Version     uint8
+	Reserved    uint8
 	Timestamp   int64
 	Latitude    float32
 	Longitude   float32
