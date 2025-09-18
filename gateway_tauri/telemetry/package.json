@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test-http": "node test-lora-sender.js",
     "build:web": "next build && next export",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

@@ -4,9 +4,12 @@
   "version": "0.1.0",
   "identifier": "com.example.gateway",
   "build": {
-    "beforeDevCommand": "cd telemetry && npm run dev -- -p 5173",
-    "beforeBuildCommand": "cd telemetry && npm run build:web",
-    "frontendDist": "telemetry/out"
+    "beforeDevCommand": "cd ../telemetry && npm run dev -- -p 5173",
+    "beforeBuildCommand": "cd ../telemetry && npm run build:web",
+    "frontendDist": "http://localhost:5173"
   },
-  "app": {"windows": [{"title": "Gateway", "width": 1000, "height": 800}]}
+  "app": {"windows": [{"title": "Gateway", "width": 1200, "height": 800}]},
+  "bundle": {
+    "icon": ["icons/icon.png"]
+  }
 }

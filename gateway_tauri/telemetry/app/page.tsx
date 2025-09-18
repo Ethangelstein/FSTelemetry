@@ -2,9 +2,9 @@
 
 import {useState, useEffect, useCallback} from "react"
 import TrackVisualization from "./components/TrackVisualization"
-import DemoControlPanel from "./components/controls/DemoControlPanel"
 import LapTimeChart from "./components/charts/LapTimeChart"
 import BatteryChart from "./components/charts/BatteryChart"
+import {useTauri} from "@/core/tauri/TauriProvider"
 
 // Type definitions for telemetry data
 interface CompressedTelemetryData {
@@ -272,7 +272,9 @@ function BatteryStatus({
 }
 
 export default function TelemetryDashboard() {
+  const t = useTauri()
   const [telemetryData, setTelemetryData] = useState<ProcessedTelemetryData | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [sessionData, setSessionData] = useState<{
     processedTelemetry: ProcessedTelemetryData[]
     telemetryHistory: {timestamp: number; voltage_mv: number; current_ma: number}[]
@@ -282,67 +284,20 @@ export default function TelemetryDashboard() {
     telemetryHistory: [],
     lapHistory: []
   })
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [technicianMode, setTechnicianMode] = useState(false)
 
-  // Simulate receiving LoRa data (for demo purposes when no real data is available)
-  const simulateLoRaData = useCallback(() => {
-    const mockCompressedData: CompressedTelemetryData = {
-      id: "trk1",
-      t: Math.floor(Date.now() / 1000),
-      g: [
-        -34.6037 + (Math.random() - 0.5) * 0.001,
-        -58.3816 + (Math.random() - 0.5) * 0.001,
-        25.3 + (Math.random() - 0.5) * 2
-      ],
-      r: 1432 + Math.floor((Math.random() - 0.5) * 200),
-      a: [
-        123 + Math.floor((Math.random() - 0.5) * 50),
-        -5 + Math.floor((Math.random() - 0.5) * 20),
-        1010 + Math.floor((Math.random() - 0.5) * 100)
-      ],
-      v: 3720 + Math.floor((Math.random() - 0.5) * 300),
-      c: 480 + Math.floor((Math.random() - 0.5) * 100)
-    }
+  useEffect(() => {
+    if (!t.isTauri || t.open || !t.ports.length) return
+    t.openPort(t.ports[0]).catch(console.error)
+  }, [t.isTauri, t.ports, t.open])
 
-    const expandedData = transformTelemetryData(mockCompressedData)
-    const processedData = processTelemeryData(expandedData)
-    setTelemetryData(processedData)
+  useEffect(() => {
+    if (!t.expanded) return
+    const processed = processTelemeryData(t.expanded)
+    setTelemetryData(processed)
     setLastUpdated(new Date())
-  }, [])
+  }, [t.expanded])
 
-  // Fallback to simulation if no data is available
-  useEffect(() => {
-    if (!telemetryData) {
-      const fallbackInterval = setInterval(() => {
-        if (!telemetryData) {
-          simulateLoRaData()
-        }
-      }, 5000) // Check every 5 seconds
-
-      return () => clearInterval(fallbackInterval)
-    }
-  }, [telemetryData, simulateLoRaData])
-
-  // Fetch session data for charts periodically
-  useEffect(() => {
-    const fetchSessionData = async () => {
-      try {
-        const response = await fetch("/api/telemetry?session=true")
-        if (response.ok) {
-          const data = await response.json()
-          setSessionData(prevData => ({...prevData, ...data}))
-        }
-      } catch (error) {
-        console.error("Error fetching session data:", error)
-      }
-    }
-
-    fetchSessionData()
-    const sessionInterval = setInterval(fetchSessionData, 5000) // Poll every 5 seconds
-
-    return () => clearInterval(sessionInterval)
-  }, [])
 
   // Connection status is now managed by Socket.IO hook
   // No need for manual connection checking
@@ -566,8 +521,6 @@ export default function TelemetryDashboard() {
         </div>
       </div>
 
-      {/* Demo Control Panel - Floating overlay */}
-      <DemoControlPanel />
     </div>
   )
 }

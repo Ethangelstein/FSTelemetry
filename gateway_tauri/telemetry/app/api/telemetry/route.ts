@@ -59,9 +59,6 @@ let latestTelemetryData: ExpandedTelemetryData | null = null
 let telemetryHistory: ExpandedTelemetryData[] = []
 let lapTimes: {lap: number; time: number}[] = []
 
-// Track demo state
-let isDemoActive: boolean = false
-let demoStartTime: number = 0
 
 const MAX_HISTORY_SIZE = 100
 
@@ -76,22 +73,15 @@ export async function POST(request: NextRequest) {
 
     const compressedData: CompressedTelemetryData = body
 
-    // Check if this is demo data
-    const isDemo = typeof compressedData.id === "string" && compressedData.id.startsWith("demo_")
-
-    // If demo data, mark demo as active
-    if (isDemo) {
-      isDemoActive = true
-      demoStartTime = Date.now()
-      if (compressedData.lapTime) {
-        lapTimes.push({lap: lapTimes.length + 1, time: compressedData.lapTime})
-      }
+    // Handle lap time data if present
+    if (compressedData.lapTime) {
+      lapTimes.push({lap: lapTimes.length + 1, time: compressedData.lapTime})
     }
 
     // Transform to expanded format
     const expandedData = transformTelemetryData(compressedData)
 
-    // Store the latest data (overwrites any existing data - demo or real)
+    // Store the latest data
     latestTelemetryData = expandedData
     telemetryHistory.push(expandedData)
     if (telemetryHistory.length > 300) {
@@ -100,17 +90,14 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(
-      `Received ${isDemo ? "DEMO" : "REAL"} telemetry data from device: ${expandedData.device_id} at ${
-        expandedData.timestamp
-      }`
+      `Received telemetry data from device: ${expandedData.device_id} at ${expandedData.timestamp}`
     )
 
     return NextResponse.json(
       {
-        message: `${isDemo ? "Demo" : "Real"} telemetry data received successfully`,
+        message: "Telemetry data received successfully",
         device_id: expandedData.device_id,
-        timestamp: expandedData.timestamp,
-        source: isDemo ? "demo" : "live"
+        timestamp: expandedData.timestamp
       },
       {status: 200}
     )
@@ -128,16 +115,14 @@ export async function GET(request: NextRequest) {
     if (getSession) {
       return NextResponse.json({
         lapTimes: lapTimes,
-        telemetryHistory: telemetryHistory,
-        source: isDemoActive ? "demo" : "live"
+        telemetryHistory: telemetryHistory
       })
     }
 
     if (!latestTelemetryData) {
       return NextResponse.json(
         {
-          message: "No telemetry data available",
-          source: isDemoActive ? "demo" : "live"
+          message: "No telemetry data available"
         },
         {status: 404}
       )
@@ -145,8 +130,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: latestTelemetryData,
-      timestamp: new Date().toISOString(),
-      source: isDemoActive ? "demo" : "live"
+      timestamp: new Date().toISOString()
     })
   } catch (error) {
     console.error("Error retrieving telemetry data:", error)
@@ -154,37 +138,3 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// DELETE method to clear demo mode and data
-export async function DELETE(request: NextRequest) {
-  try {
-    const {searchParams} = new URL(request.url)
-    const mode = searchParams.get("mode")
-
-    if (mode !== "demo") {
-      return NextResponse.json({error: "DELETE method only available for demo mode"}, {status: 405})
-    }
-
-    // Clear demo state
-    isDemoActive = false
-    demoStartTime = 0
-    lapTimes = []
-
-    // Only clear if current data is demo data
-    if (latestTelemetryData?.device_id.startsWith("demo_")) {
-      latestTelemetryData = null
-    }
-
-    // Remove demo entries from history
-    telemetryHistory = telemetryHistory.filter(entry => !entry.device_id.startsWith("demo_"))
-
-    console.log("Demo mode cleared")
-
-    return NextResponse.json({
-      message: "Demo mode cleared successfully",
-      source: "demo"
-    })
-  } catch (error) {
-    console.error("Error clearing demo mode:", error)
-    return NextResponse.json({error: "Failed to clear demo mode"}, {status: 500})
-  }
-}

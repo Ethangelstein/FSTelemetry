@@ -3,6 +3,8 @@
 
 # Tauri
 .tauri
+target
+gen
 
 # Node
 node_modules
