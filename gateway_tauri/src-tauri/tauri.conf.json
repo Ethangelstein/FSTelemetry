@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Gateway Tauri",
+  "version": "0.1.0",
+  "identifier": "com.example.gateway",
+  "build": {
+    "beforeDevCommand": "cd telemetry && npm run dev -- -p 5173",
+    "beforeBuildCommand": "cd telemetry && npm run build:web",
+    "frontendDist": "telemetry/out"
+  },
+  "app": {"windows": [{"title": "Gateway", "width": 1000, "height": 800}]}
+}

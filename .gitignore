@@ -1,2 +1,11 @@
+# Environment variables
 .env
 
+# Tauri
+.tauri
+
+# Node
+node_modules
+
+# Yarn
+yarn.lock

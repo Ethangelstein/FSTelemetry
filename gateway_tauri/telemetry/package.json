@@ -1,0 +1,47 @@
+{
+  "name": "telemetry",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test-http": "node test-lora-sender.js",
+    "build:web": "next build && next export",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@turf/turf": "^7.2.0",
+    "@types/d3-transition": "^3.0.9",
+    "@types/recharts": "^1.8.29",
+    "apexcharts": "^4.7.0",
+    "d3-path": "^3.1.0",
+    "d3-selection": "^3.0.0",
+    "d3-transition": "^3.0.1",
+    "d3-zoom": "^3.0.0",
+    "next": "15.3.4",
+    "react": "^19.0.0",
+    "react-apexcharts": "^1.7.0",
+    "react-dom": "^19.0.0",
+    "svg-path-parser": "^1.1.0",
+    "turf": "^3.0.14",
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/d3-path": "^3.1.1",
+    "@types/d3-selection": "^3.0.11",
+    "@types/d3-zoom": "^3.0.8",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.4",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
