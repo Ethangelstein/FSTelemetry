@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Serialize, Default, Debug)]
 pub struct Telemetry {
@@ -16,6 +17,11 @@ pub struct Telemetry {
   pub snr: f32,
   pub packet_count: u32,
 }
+
+pub fn now_millis() -> i64 {
+  SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64
+}
+
 
 pub fn decode_frame(frame: &[u8]) -> Option<Telemetry> {
   if frame.len() < 60 { return None; }
@@ -40,6 +46,32 @@ pub fn decode_frame(frame: &[u8]) -> Option<Telemetry> {
     latitude: lat, longitude: lon, altitude: alt,
     rpm, ax, ay, az, voltage_mv: vm, current_ma: cm, rssi, snr, packet_count: pc
   })
+}
+
+pub fn encode_frame(t: &Telemetry, magic: [u8;2], use_crc: bool, frame_size: usize) -> Vec<u8> {
+  let mut b = Vec::<u8>::with_capacity(frame_size);
+  b.push(magic[0]); b.push(magic[1]);
+  b.push(t.version); b.push(t.reserved);
+  b.extend_from_slice(&t.timestamp.to_le_bytes());
+  b.extend_from_slice(&t.latitude.to_le_bytes());
+  b.extend_from_slice(&t.longitude.to_le_bytes());
+  b.extend_from_slice(&t.altitude.to_le_bytes());
+  b.extend_from_slice(&t.rpm.to_le_bytes());
+  b.extend_from_slice(&t.ax.to_le_bytes());
+  b.extend_from_slice(&t.ay.to_le_bytes());
+  b.extend_from_slice(&t.az.to_le_bytes());
+  b.extend_from_slice(&t.voltage_mv.to_le_bytes());
+  b.extend_from_slice(&t.current_ma.to_le_bytes());
+  b.extend_from_slice(&t.rssi.to_le_bytes());
+  b.extend_from_slice(&t.snr.to_le_bytes());
+  b.extend_from_slice(&t.packet_count.to_le_bytes());
+
+  if use_crc {
+    let crc = crc16_modbus(&b);
+    b.extend_from_slice(&crc.to_le_bytes());
+  }
+  if b.len() < frame_size { b.resize(frame_size, 0); }
+  b
 }
 
 pub fn crc16_modbus(data: &[u8]) -> u16 {

@@ -11,7 +11,9 @@ fn main() {
       ipc::list_ports,
       ipc::open_port,
       ipc::write_bytes,
-      ipc::close_port
+      ipc::close_port,
+      ipc::start_demo,   
+      ipc::stop_demo     
     ])
     .run(tauri::generate_context!())
     .expect("error running tauri");

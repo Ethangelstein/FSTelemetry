@@ -1,10 +1,12 @@
-use std::{sync::{Arc, Mutex}, time::Duration};
-use tokio::{io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, sync::mpsc};
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_serial::{SerialPortBuilderExt, DataBits, FlowControl, Parity, StopBits};
 
 #[derive(Default)]
 pub struct SerialState {
   pub tx: Option<mpsc::Sender<Vec<u8>>>,
+  pub demo_stop: Option<oneshot::Sender<()>>,
 }
 
 pub async fn open(
