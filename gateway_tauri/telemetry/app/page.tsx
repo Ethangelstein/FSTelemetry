@@ -51,28 +51,6 @@ interface ProcessedTelemetryData extends ExpandedTelemetryData {
   }
 }
 
-// Transform compressed data to expanded format
-function transformTelemetryData(compressed: CompressedTelemetryData): ExpandedTelemetryData {
-  return {
-    device_id: compressed.id,
-    timestamp: compressed.t * 1000,
-    gps: {
-      lat: compressed.g[0],
-      lon: compressed.g[1],
-      alt: compressed.g[2],
-      fix: true
-    },
-    rpm: compressed.r,
-    accel_raw: {
-      x: compressed.a[0],
-      y: compressed.a[1],
-      z: compressed.a[2]
-    },
-    voltage_mv: compressed.v,
-    current_ma: compressed.c
-  }
-}
-
 // Process telemetry data to calculate derived metrics
 function processTelemeryData(data: ExpandedTelemetryData): ProcessedTelemetryData {
   // Convert accelerometer readings from mg to g-force
@@ -179,8 +157,6 @@ function PrimaryMetric({
 // G-Force visualization component
 function GForceDisplay({calculated}: {calculated: ProcessedTelemetryData["calculated"]}) {
   const maxG = 3
-  const lateralPercent = Math.min(100, (Math.abs(calculated.g_force_lateral) / maxG) * 100)
-  const longitudinalPercent = Math.min(100, (Math.abs(calculated.g_force_longitudinal) / maxG) * 100)
 
   return (
     <div className="bg-black border-2 border-purple-400 p-4 font-mono">
@@ -231,11 +207,12 @@ function BatteryStatus({
   const voltage_v = voltage_mv / 1000
   const percentage = calculated.battery_percentage
 
-  let status: "optimal" | "normal" | "warning" | "critical" = "normal"
-  if (percentage > 80) status = "optimal"
-  else if (percentage > 50) status = "normal"
-  else if (percentage > 20) status = "warning"
-  else status = "critical"
+  const status: "optimal" | "normal" | "warning" | "critical" = (() => {
+    if (percentage > 80) return "optimal"
+    else if (percentage > 50) return "normal"
+    else if (percentage > 20) return "warning"
+    else return "critical"
+  })()
 
   return (
     <div className="bg-black border-2 border-green-400 p-4 font-mono">
@@ -276,7 +253,7 @@ export default function TelemetryDashboard() {
   const t = useTauri()
   const [telemetryData, setTelemetryData] = useState<ProcessedTelemetryData | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [sessionData, setSessionData] = useState<{
+  const [sessionData] = useState<{
     processedTelemetry: ProcessedTelemetryData[]
     telemetryHistory: {timestamp: number; voltage_mv: number; current_ma: number}[]
     lapHistory: {lap: number; time: number}[]
@@ -290,7 +267,7 @@ export default function TelemetryDashboard() {
   useEffect(() => {
     if (!t.isTauri || t.open || !t.ports.length) return
     t.openPort(t.ports[0]).catch(console.error)
-  }, [t.isTauri, t.ports, t.open])
+  }, [t.isTauri, t.ports, t.open, t])
 
   useEffect(() => {
     if (!t.expanded) return

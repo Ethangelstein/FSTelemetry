@@ -51,7 +51,13 @@ export default function LapTimeChart({data}: LapTimeChartProps) {
       }
     },
     colors: [
-      function ({value, seriesIndex, w}: {value: number; seriesIndex: number; w: any}) {
+      function ({
+        seriesIndex,
+        w
+      }: {
+        seriesIndex: number
+        w: {config: {series: Array<{data: number[]}>}; dataPointIndex: number}
+      }) {
         if (w.config.series[seriesIndex].data[w.dataPointIndex] === bestTime) {
           return "#ff8800"
         } else {
