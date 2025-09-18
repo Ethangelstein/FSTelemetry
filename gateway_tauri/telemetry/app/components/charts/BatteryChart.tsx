@@ -44,7 +44,6 @@ export default function BatteryChart({data}: BatteryChartProps) {
       },
       animations: {
         enabled: true,
-        easing: "linear",
         dynamicAnimation: {
           speed: 1000
         }
@@ -70,8 +69,8 @@ export default function BatteryChart({data}: BatteryChartProps) {
         colors: "#9CA3AF"
       },
       markers: {
-        width: 12,
-        height: 12
+        size: 12,
+        strokeWidth: 12
       }
     },
     tooltip: {

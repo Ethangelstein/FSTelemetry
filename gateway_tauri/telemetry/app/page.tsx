@@ -1,9 +1,10 @@
 "use client"
 
-import {useState, useEffect, useCallback} from "react"
+import {useState, useEffect} from "react"
 import TrackVisualization from "./components/TrackVisualization"
 import LapTimeChart from "./components/charts/LapTimeChart"
 import BatteryChart from "./components/charts/BatteryChart"
+import DemoButtons from "./components/DemoButtons"
 import {useTauri} from "@/core/tauri/TauriProvider"
 
 // Type definitions for telemetry data
@@ -298,10 +299,6 @@ export default function TelemetryDashboard() {
     setLastUpdated(new Date())
   }, [t.expanded])
 
-
-  // Connection status is now managed by Socket.IO hook
-  // No need for manual connection checking
-
   if (!telemetryData) {
     return (
       <div className="min-h-screen bg-black text-green-400 flex items-center justify-center font-mono">
@@ -309,6 +306,8 @@ export default function TelemetryDashboard() {
           <div className="animate-pulse text-4xl mb-4">◉ TELEMETRY SYSTEM</div>
           <div className="text-sm mb-2">AWAITING SIGNAL...</div>
         </div>
+        {/* Demo Buttons - visible even when awaiting data */}
+        <DemoButtons />
       </div>
     )
   }
@@ -521,6 +520,8 @@ export default function TelemetryDashboard() {
         </div>
       </div>
 
+      {/* Demo Buttons */}
+      <DemoButtons />
     </div>
   )
 }
