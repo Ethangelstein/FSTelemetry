@@ -1,4 +1,3 @@
-"use client"
 import {invoke} from "@tauri-apps/api/core"
 import {listen, UnlistenFn} from "@tauri-apps/api/event"
 import type {Telemetry, FrameEv} from "./types"

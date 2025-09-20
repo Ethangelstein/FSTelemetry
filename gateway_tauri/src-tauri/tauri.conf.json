@@ -3,16 +3,26 @@
   "productName": "Gateway Tauri",
   "version": "0.1.0",
   "identifier": "com.example.gateway",
+
   "build": {
-    "beforeDevCommand": "cd ../telemetry && npm run dev -- -p 5173",
+    "beforeDevCommand": "npm run dev --prefix ../telemetry -- --port 5173",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "cd ../telemetry && npm run build:web",
-    "frontendDist": "../telemetry/out"
+    "beforeBuildCommand": "npm run build --prefix ../telemetry",
+    "frontendDist": "../telemetry/dist"
   },
+
   "app": {
     "windows": [{"title": "Gateway", "width": 1200, "height": 800}]
   },
+
   "bundle": {
-    "icon": ["icons/icon.png"]
+    "icon": ["icons/icon.ico", "icons/icon.png"],
+    "targets": ["nsis"],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      }
+    }
   }
 }

@@ -1,7 +1,7 @@
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio_serial::{SerialPortBuilderExt, DataBits, FlowControl, Parity, StopBits};
+use tokio_serial::{DataBits, FlowControl, Parity, StopBits};
 
 #[derive(Default)]
 pub struct SerialState {
@@ -17,6 +17,7 @@ pub async fn open(
     .parity(Parity::None).flow_control(FlowControl::None)
     .timeout(Duration::from_millis(1000));
   let mut port = tokio_serial::SerialStream::open(&builder).map_err(|e| e.to_string())?;
+  #[cfg(target_family = "unix")]
   let _ = port.set_exclusive(false);
   let (_tx, rx) = mpsc::channel::<Vec<u8>>(100);
   Ok((port, rx))

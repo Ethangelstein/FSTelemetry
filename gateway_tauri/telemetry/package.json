@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "build:web": "next build && next export -o dist",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
     "@turf/turf": "^7.2.0",
     "@types/d3-transition": "^3.0.9",
     "@types/recharts": "^1.8.29",
@@ -20,27 +20,27 @@
     "d3-selection": "^3.0.0",
     "d3-transition": "^3.0.1",
     "d3-zoom": "^3.0.0",
-    "next": "15.3.4",
-    "react": "^19.0.0",
+    "react": "^19.1.1",
     "react-apexcharts": "^1.7.0",
-    "react-dom": "^19.0.0",
+    "react-dom": "^19.1.1",
     "svg-path-parser": "^1.1.0",
-    "turf": "^3.0.14",
-    "@tauri-apps/api": "^2.0.0"
+    "turf": "^3.0.14"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@tauri-apps/cli": "^2.0.0",
     "@types/d3-path": "^3.1.1",
     "@types/d3-selection": "^3.0.11",
     "@types/d3-zoom": "^3.0.8",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react-swc": "^4.0.0",
     "eslint": "^9",
-    "eslint-config-next": "15.3.4",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "@tauri-apps/cli": "^2.0.0"
+    "typescript": "^5.9.2",
+    "vite": "^4.5.0",
+    "vite-plugin-svgr": "^4.0.0"
   }
 }

@@ -82,14 +82,11 @@ pub async fn open_port(
 ) -> Result<(), String> {
   let (port, _rx_writes) = serial::open(portName, baud).await?;
 
-  // dividir en reader / writer
   let (reader, writer) = split(port);
 
-  // Writer channel into state
   let (tx, rx) = mpsc::channel::<Vec<u8>>(100);
   { state.lock().unwrap().tx = Some(tx); }
 
-  // Writer
   let app_w = app.clone();
   tokio::spawn(async move {
     serial::writer_task(writer, rx, move |e| {
@@ -97,7 +94,6 @@ pub async fn open_port(
     }).await;
   });
 
-  // Reader
   let app_r = app.clone();
   tokio::spawn(async move {
     serial::reader_loop(reader, [magic0, magic1], frameSize, useCrc, move |frame, ok| {
@@ -105,7 +101,7 @@ pub async fn open_port(
       if let Some(t) = decode_frame(&frame) {
         let _ = app_r.emit(EV_TELEMETRY, t);
       }
-    }).await; // <-- reader_loop es async; ciérralo con .await dentro del spawn
+    }).await;
   });
 
   app.emit(EV_SERIAL_OPEN, serde_json::json!({"ok": true})).ok();

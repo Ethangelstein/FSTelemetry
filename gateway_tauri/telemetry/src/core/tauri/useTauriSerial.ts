@@ -1,10 +1,7 @@
-// telemetry/core/tauri/useTauriSerial.ts
-"use client"
 import {useEffect, useMemo, useRef, useState} from "react"
 import {TauriBridge} from "./bridge"
 import {isTauri} from "./types"
 
-// Copiá o importá tu tipo:
 export type ExpandedTelemetryData = {
   device_id: string
   timestamp: number
@@ -15,7 +12,6 @@ export type ExpandedTelemetryData = {
   current_ma: number
 }
 
-// El payload que manda Rust:
 type TauriTelemetry = {
   version: number
   reserved: number

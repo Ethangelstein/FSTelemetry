@@ -1,22 +1,9 @@
-"use client"
-
 import {useState, useEffect} from "react"
-import TrackVisualization from "./components/TrackVisualization"
-import LapTimeChart from "./components/charts/LapTimeChart"
-import BatteryChart from "./components/charts/BatteryChart"
-import DemoButtons from "./components/DemoButtons"
-import {useTauri} from "@/core/tauri/TauriProvider"
-
-// Type definitions for telemetry data
-interface CompressedTelemetryData {
-  id: string
-  t: number
-  g: [number, number, number] // [lat, lon, alt]
-  r: number
-  a: [number, number, number] // [x, y, z]
-  v: number
-  c: number
-}
+import TrackVisualization from "../components/TrackVisualization"
+import LapTimeChart from "../components/charts/LapTimeChart"
+import BatteryChart from "../components/charts/BatteryChart"
+import DemoButtons from "../components/DemoButtons"
+import {useTauri} from "../core/tauri/TauriProvider"
 
 interface ExpandedTelemetryData {
   device_id: string
@@ -51,30 +38,23 @@ interface ProcessedTelemetryData extends ExpandedTelemetryData {
   }
 }
 
-// Process telemetry data to calculate derived metrics
-function processTelemeryData(data: ExpandedTelemetryData): ProcessedTelemetryData {
-  // Convert accelerometer readings from mg to g-force
+function processTelemetryData(data: ExpandedTelemetryData): ProcessedTelemetryData {
   const g_force_lateral = data.accel_raw.x / 1000
   const g_force_longitudinal = data.accel_raw.y / 1000
-  const g_force_vertical = (data.accel_raw.z - 1000) / 1000 // Subtract 1g for gravity
+  const g_force_vertical = (data.accel_raw.z - 1000) / 1000
   const g_force_total = Math.sqrt(g_force_lateral ** 2 + g_force_longitudinal ** 2 + g_force_vertical ** 2)
 
-  // Estimate speed from RPM (assuming wheel circumference)
-  const wheel_circumference_m = 1.823 // 58 cm diameter wheel (π·d)
+  const wheel_circumference_m = 1.823
   const speed_estimate_kmh = (data.rpm * wheel_circumference_m * 60) / 1000
 
-  // Power calculations
   const voltage_v = data.voltage_mv / 1000
   const current_a = data.current_ma / 1000
   const power_consumption_w = voltage_v * current_a
 
-  // Battery estimation for 48 V pack (40 V empty, 48 V full)
   const battery_percentage = Math.max(0, Math.min(100, ((voltage_v - 40) / (48 - 40)) * 100))
 
-  // Efficiency calculation (Wh/km)
   const efficiency_wh_km = speed_estimate_kmh > 0 ? power_consumption_w / speed_estimate_kmh : 0
 
-  // Temperature estimate: 25 °C base, rises with current draw, capped at 55 °C
   let temperature_estimate_c = 25 + data.current_ma * 0.0018
   temperature_estimate_c = Math.min(55, Math.max(25, temperature_estimate_c))
 
@@ -94,7 +74,6 @@ function processTelemeryData(data: ExpandedTelemetryData): ProcessedTelemetryDat
   }
 }
 
-// F1-style metric card component
 function MetricCard({
   label,
   value,
@@ -126,7 +105,6 @@ function MetricCard({
   )
 }
 
-// Large display component for key metrics
 function PrimaryMetric({
   label,
   value,
@@ -154,7 +132,6 @@ function PrimaryMetric({
   )
 }
 
-// G-Force visualization component
 function GForceDisplay({calculated}: {calculated: ProcessedTelemetryData["calculated"]}) {
   const maxG = 3
 
@@ -162,13 +139,11 @@ function GForceDisplay({calculated}: {calculated: ProcessedTelemetryData["calcul
     <div className="bg-black border-2 border-purple-400 p-4 font-mono">
       <div className="text-xs text-gray-400 uppercase tracking-wide mb-4">G-FORCE ANALYSIS</div>
 
-      {/* G-Force Circle */}
       <div className="relative w-32 h-32 mx-auto mb-4">
         <div className="absolute inset-0 border-2 border-gray-600 rounded-full"></div>
         <div className="absolute inset-2 border border-gray-700 rounded-full"></div>
         <div className="absolute inset-4 border border-gray-800 rounded-full"></div>
 
-        {/* G-Force Dot */}
         <div
           className="absolute w-3 h-3 bg-purple-400 rounded-full transform -translate-x-1/2 -translate-y-1/2"
           style={{
@@ -196,7 +171,6 @@ function GForceDisplay({calculated}: {calculated: ProcessedTelemetryData["calcul
   )
 }
 
-// Battery status component
 function BatteryStatus({
   calculated,
   voltage_mv
@@ -271,7 +245,7 @@ export default function TelemetryDashboard() {
 
   useEffect(() => {
     if (!t.expanded) return
-    const processed = processTelemeryData(t.expanded)
+    const processed = processTelemetryData(t.expanded)
     setTelemetryData(processed)
     setLastUpdated(new Date())
   }, [t.expanded])
@@ -283,7 +257,6 @@ export default function TelemetryDashboard() {
           <div className="animate-pulse text-4xl mb-4">◉ TELEMETRY SYSTEM</div>
           <div className="text-sm mb-2">AWAITING SIGNAL...</div>
         </div>
-        {/* Demo Buttons - visible even when awaiting data */}
         <DemoButtons />
       </div>
     )
@@ -314,9 +287,7 @@ export default function TelemetryDashboard() {
   return (
     <div className="min-h-screen bg-black text-white p-4 font-mono">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* --- LEFT COLUMN: Strategy & Timing --- */}
         <div className="lg:col-span-1 space-y-6">
-          {/* Header */}
           <div className="border-b-2 border-gray-600 pb-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-6">
@@ -340,7 +311,6 @@ export default function TelemetryDashboard() {
             </div>
           </div>
 
-          {/* Lap Analysis */}
           <div className="bg-black border-2 border-orange-400 p-4 font-mono">
             <div className="text-xs text-gray-400 uppercase tracking-wide mb-4">LAP ANALYSIS</div>
             <div className="space-y-2 text-sm">
@@ -372,7 +342,6 @@ export default function TelemetryDashboard() {
           </div>
           <LapTimeChart data={sessionData.lapHistory} />
 
-          {/* Performance */}
           <div className="bg-black border-2 border-pink-400 p-4 font-mono">
             <div className="text-xs text-gray-400 uppercase tracking-wide mb-4">PERFORMANCE</div>
             <div className="space-y-2 text-sm">
@@ -396,7 +365,6 @@ export default function TelemetryDashboard() {
           </div>
         </div>
 
-        {/* --- CENTER COLUMN: Driver & Vitals --- */}
         <div className="lg:col-span-2 space-y-6">
           {/* Primary Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -420,16 +388,23 @@ export default function TelemetryDashboard() {
             />
           </div>
 
-          {/* Track Visualization */}
           <TrackVisualization currentGPS={telemetryData.gps} speed={telemetryData.calculated.speed_estimate_kmh} />
 
-          {/* G-Force Display */}
           <GForceDisplay calculated={telemetryData.calculated} />
         </div>
 
         {/* --- RIGHT COLUMN: Systems & Health --- */}
         <div className="lg:col-span-1 space-y-6">
-          {/* Tech Mode Toggle */}
+          {t.isTauri && (
+            <button
+              onClick={() => t.ports[0] && t.openPort(t.ports[0])}
+              disabled={!t.ports.length || t.open}
+              className="px-3 py-1 border"
+            >
+              {t.open ? "Connected" : t.ports[0] ? `Connect ${t.ports[0]}` : "No ports"}
+            </button>
+          )}
+
           <button
             onClick={() => setTechnicianMode(!technicianMode)}
             className={`w-full px-4 py-2 border-2 text-sm font-bold ${
@@ -439,11 +414,9 @@ export default function TelemetryDashboard() {
             TECH MODE {technicianMode ? "ON" : "OFF"}
           </button>
 
-          {/* Battery Status */}
           <BatteryStatus calculated={telemetryData.calculated} voltage_mv={telemetryData.voltage_mv} />
           <BatteryChart data={sessionData.telemetryHistory} />
 
-          {/* GPS Status */}
           <div className="bg-black border-2 border-cyan-400 p-4 font-mono">
             <div className="text-xs text-gray-400 uppercase tracking-wide mb-4">GPS STATUS</div>
             <div className="space-y-2 text-sm">
@@ -466,7 +439,6 @@ export default function TelemetryDashboard() {
             </div>
           </div>
 
-          {/* Secondary Metrics */}
           <div className="bg-black border-2 border-gray-600 p-4 font-mono">
             <div className="text-xs text-gray-400 uppercase tracking-wide mb-4">SYSTEMS CHECK</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -485,7 +457,6 @@ export default function TelemetryDashboard() {
             </div>
           </div>
 
-          {/* Technician Mode - Raw Data */}
           {technicianMode && (
             <div className="border-2 border-yellow-400 p-4">
               <div className="text-yellow-400 text-sm font-bold mb-4 uppercase">⚠️ TECHNICIAN MODE - RAW DATA</div>
@@ -497,7 +468,6 @@ export default function TelemetryDashboard() {
         </div>
       </div>
 
-      {/* Demo Buttons */}
       <DemoButtons />
     </div>
   )

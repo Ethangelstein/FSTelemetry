@@ -1,9 +1,7 @@
-"use client"
-
-import dynamic from "next/dynamic"
+import {lazy, Suspense} from "react"
 import {ApexOptions} from "apexcharts"
 
-const Chart = dynamic(() => import("react-apexcharts"), {ssr: false})
+const Chart = lazy(() => import("react-apexcharts"))
 
 interface LapTimeChartProps {
   data: {lap: number; time: number}[]
@@ -106,7 +104,11 @@ export default function LapTimeChart({data}: LapTimeChartProps) {
 
   return (
     <div className="bg-black border-2 border-orange-400 p-4 font-mono h-48 w-full">
-      <Chart options={options} series={series} type="bar" height="100%" />
+      <Suspense
+        fallback={<div className="flex items-center justify-center h-full text-gray-500">Loading chart...</div>}
+      >
+        <Chart options={options} series={series} type="bar" height="100%" />
+      </Suspense>
     </div>
   )
 }
