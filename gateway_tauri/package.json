@@ -2,13 +2,12 @@
   "name": "telemetry",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
     "lint": "eslint .",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

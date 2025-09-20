@@ -25,4 +25,9 @@ export const EV = {
   Telemetry: "telemetry"
 } as const
 
-export const isTauri = typeof window !== "undefined" && (window as any).__TAURI__ !== undefined
+export const isBrowser = typeof window !== "undefined"
+
+export const isTauri =
+  !!(import.meta as any)?.env?.TAURI_PLATFORM ||
+  (isBrowser && !!(window as any).__TAURI_INTERNALS__) ||
+  (isBrowser && /\bTauri\b/i.test(navigator.userAgent))

@@ -14,12 +14,13 @@ export default defineConfig(async ({mode}) => {
       }
     },
     server: {
+      host: true,
       strictPort: true,
-      port: 1420, // común en Tauri
+      port: 1420,
       hmr: {overlay: true}
     },
     build: {
-      target: ["es2021"], // recomendado para Tauri (Chrome 110+)
+      target: ["es2021"],
       outDir: "dist",
       assetsDir: "assets"
     }

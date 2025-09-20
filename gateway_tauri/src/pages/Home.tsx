@@ -239,11 +239,7 @@ export default function TelemetryDashboard() {
   const [technicianMode, setTechnicianMode] = useState(false)
 
   useEffect(() => {
-    if (!t.isTauri || t.open || !t.ports.length) return
-    t.openPort(t.ports[0]).catch(console.error)
-  }, [t.isTauri, t.ports, t.open, t])
-
-  useEffect(() => {
+    console.log({expanded: t.expanded})
     if (!t.expanded) return
     const processed = processTelemetryData(t.expanded)
     setTelemetryData(processed)
@@ -306,7 +302,7 @@ export default function TelemetryDashboard() {
                 TIME: <span className="text-blue-400">{lastUpdated?.toLocaleTimeString()}</span>
               </span>
               <span>
-                SESSION: <span className="text-blue-400">LIVE</span>
+                SESSION: <span className="text-blue-400">{t.open ? "LIVE" : telemetryData ? "DEMO" : "IDLE"}</span>
               </span>
             </div>
           </div>
