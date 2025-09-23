@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Emitter};
 use std::sync::{Arc, Mutex};
 use tokio::{io::split, sync::{mpsc, oneshot}, time::{self, Duration}};
-use crate::{telemetry::{Telemetry, decode_frame, encode_frame, now_millis}, serial, serial::SerialState};
+use crate::{telemetry::{Telemetry, decode_frame, encode_frame, now_seconds}, serial, serial::SerialState};
 
 
 #[derive(Clone, serde::Serialize)]
@@ -39,7 +39,8 @@ pub async fn start_demo(
         _ = &mut rx => break,
         _ = tick.tick() => {
           let t = Telemetry {
-            version: 1, reserved: 0, timestamp: now_millis(),
+            version: 1, reserved: 0, timestamp: now_seconds(),
+            id: format!("FS{:06}", n % 1000000), // ID único para demo
             latitude: -34.60 + (n as f32) * 0.00005,
             longitude: -58.38 + (n as f32) * 0.00003,
             altitude: 12.0 + ((n % 50) as f32) * 0.1,

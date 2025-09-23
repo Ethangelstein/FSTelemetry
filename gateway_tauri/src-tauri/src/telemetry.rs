@@ -5,46 +5,63 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub struct Telemetry {
   pub version: u8,
   pub reserved: u8,
-  pub timestamp: i64,
+  pub timestamp: u32,         // viene como uint32 (Unix s)
+  pub id: String,             // id[16] ASCII
   pub latitude: f32,
   pub longitude: f32,
   pub altitude: f32,
   pub rpm: i16,
   pub ax: i16, pub ay: i16, pub az: i16,
-  pub voltage_mv: u16,
-  pub current_ma: u16,
-  pub rssi: i16,
-  pub snr: f32,
+  pub voltage_mv: u16,        // mV
+  pub current_ma: u16,        // mA
+  pub rssi: i16,              // dBm
+  pub snr: f32,               // dB
   pub packet_count: u32,
 }
 
-pub fn now_millis() -> i64 {
-  SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64
+pub fn now_seconds() -> u32 {
+  SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32
 }
 
 
 pub fn decode_frame(frame: &[u8]) -> Option<Telemetry> {
-  if frame.len() < 60 { return None; }
-  let mut o = 2usize; // 'T','D'
-  let v = *frame.get(o)?; o+=1;
-  let r = *frame.get(o)?; o+=1;
-  let ts = i64::from_le_bytes(frame.get(o..o+8)?.try_into().ok()?); o+=8;
-  let lat=f32::from_le_bytes(frame.get(o..o+4)?.try_into().ok()?); o+=4;
-  let lon=f32::from_le_bytes(frame.get(o..o+4)?.try_into().ok()?); o+=4;
-  let alt=f32::from_le_bytes(frame.get(o..o+4)?.try_into().ok()?); o+=4;
-  let rpm=i16::from_le_bytes(frame.get(o..o+2)?.try_into().ok()?); o+=2;
-  let ax=i16::from_le_bytes(frame.get(o..o+2)?.try_into().ok()?); o+=2;
-  let ay=i16::from_le_bytes(frame.get(o..o+2)?.try_into().ok()?); o+=2;
-  let az=i16::from_le_bytes(frame.get(o..o+2)?.try_into().ok()?); o+=2;
-  let vm=u16::from_le_bytes(frame.get(o..o+2)?.try_into().ok()?); o+=2;
-  let cm=u16::from_le_bytes(frame.get(o..o+2)?.try_into().ok()?); o+=2;
-  let rssi=i16::from_le_bytes(frame.get(o..o+2)?.try_into().ok()?); o+=2;
-  let snr=f32::from_le_bytes(frame.get(o..o+4)?.try_into().ok()?); o+=4;
-  let pc=u32::from_le_bytes(frame.get(o..o+4)?.try_into().ok()?); o+=4;
-  Some(Telemetry {
-    version: v, reserved: r, timestamp: ts,
-    latitude: lat, longitude: lon, altitude: alt,
-    rpm, ax, ay, az, voltage_mv: vm, current_ma: cm, rssi, snr, packet_count: pc
+  if frame.len() != 60 { return None; }
+  if frame[0] != b'T' || frame[1] != b'D' { return None; }
+
+  // ayuda para leer
+  let le_u16 = |i| u16::from_le_bytes([frame[i], frame[i+1]]);
+  let le_i16 = |i| i16::from_le_bytes([frame[i], frame[i+1]]);
+  let le_u32 = |i| u32::from_le_bytes([frame[i], frame[i+1], frame[i+2], frame[i+3]]);
+  let le_f32 = |i| f32::from_le_bytes([frame[i], frame[i+1], frame[i+2], frame[i+3]]);
+
+  let version   = frame[2];
+  let reserved  = frame[3];
+  let id_raw    = &frame[4..20]; // 16 bytes
+  let id = {
+    // cortar en el primer 0x00 para null-terminated
+    let end = id_raw.iter().position(|&b| b == 0).unwrap_or(id_raw.len());
+    String::from_utf8_lossy(&id_raw[..end]).to_string()
+  };
+  let timestamp   = le_u32(20);
+  let latitude    = le_f32(24);
+  let longitude   = le_f32(28);
+  let altitude    = le_f32(32);
+  let rpm         = le_i16(36);
+  let ax          = le_i16(38);
+  let ay          = le_i16(40);
+  let az          = le_i16(42);
+  let voltage_mv  = le_u16(44);
+  let current_ma  = le_u16(46);
+  let rssi        = le_i16(48);
+  let snr         = le_f32(50);
+  let packet_count= le_u32(54);
+  // CRC (bytes 58..60) ya verificado en serial.rs
+
+  Some(Telemetry{
+    version, reserved, id, timestamp,
+    latitude, longitude, altitude,
+    rpm, ax, ay, az,
+    voltage_mv, current_ma, rssi, snr, packet_count
   })
 }
 
@@ -52,6 +69,14 @@ pub fn encode_frame(t: &Telemetry, magic: [u8;2], use_crc: bool, frame_size: usi
   let mut b = Vec::<u8>::with_capacity(frame_size);
   b.push(magic[0]); b.push(magic[1]);
   b.push(t.version); b.push(t.reserved);
+  
+  // id[16] - rellenar con nulls si es más corto
+  let mut id_bytes = [0u8; 16];
+  let id_bytes_src = t.id.as_bytes();
+  let copy_len = id_bytes_src.len().min(16);
+  id_bytes[..copy_len].copy_from_slice(&id_bytes_src[..copy_len]);
+  b.extend_from_slice(&id_bytes);
+  
   b.extend_from_slice(&t.timestamp.to_le_bytes());
   b.extend_from_slice(&t.latitude.to_le_bytes());
   b.extend_from_slice(&t.longitude.to_le_bytes());
