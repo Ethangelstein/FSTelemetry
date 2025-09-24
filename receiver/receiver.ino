@@ -4,12 +4,18 @@
  * - RX continuo
  * - Decodificación del payload binario v3 (18 bytes)
  ****************************************************/
+
  #include <Arduino.h>
  #include <SPI.h>
  #include <LoRa.h>
+ #include <math.h>
+ #include <string.h>
  #include "esp_system.h"
  
- /*********** Pines (ajusta si hace falta) ***********/
+ /*********** FLAGS ***********/
+ #define ENABLE_FAKE_INPUT  0
+ 
+ /*********** Pines ***********/
  #define LORA_SS   5
  #define LORA_RST  2
  #define LORA_DIO0 3
@@ -34,6 +40,7 @@
  #define ORIGIN_LAT       (-34.639444)
  #define ORIGIN_LON       (-58.483056)
  
+ /*********** Estado ***********/
  static uint32_t g_pktCount = 0;
  static uint32_t g_lastRxMs = 0;
  
@@ -114,6 +121,7 @@
    return out;
  }
  
+ /*********** Utilidades ***********/
  static void waitSerialReady(uint32_t timeout_ms=3000){
    uint32_t t0=millis();
    while(!Serial && (millis()-t0)<timeout_ms) {}
@@ -134,7 +142,6 @@
      default: return "UNKNOWN";
    }
  }
- 
  static void printRadioConfig(){
    Serial.println("=== LoRa inicializado ===");
    Serial.print("Frecuencia: "); Serial.print(RF_FREQUENCY/1E6); Serial.println(" MHz");
@@ -146,7 +153,7 @@
    Serial.println("Modo: RX continuo. Esperando paquetes...\n");
  }
  
- /*********** ===== AÑADIDO: Emisión binaria TD (60 bytes + CRC) ===== ***********/
+ /*********** CRC16 Modbus (LE) ***********/
  static uint16_t crc16_modbus(const uint8_t* data, size_t n){
    uint16_t crc = 0xFFFF;
    for(size_t i=0;i<n;i++){
@@ -159,25 +166,17 @@
    return crc;
  }
  
- // Layout EXACTO (little-endian) que tu Rust ya espera:
- // [0] 'T'  [1] 'D'
- // [2] version (u8)      -> 1
- // [3] reserved (u8)     -> 0
- // [4..20] id[16] ASCII null-terminated (tu id decimal)
- // [20..24] timestamp u32 (s)  -> usamos millis()/1000
- // [24..28] latitude f32
- // [28..32] longitude f32
- // [32..36] altitude f32       -> 0.0
- // [36..38] rpm i16            -> 0
- // [38..40] ax i16             -> int16 de ax_g * 100 (centi-g)
- // [40..42] ay i16             -> int16 de ay_g * 100
- // [42..44] az i16             -> int16 de az_g * 100
- // [44..46] voltage_mv u16     -> 0
- // [46..48] current_ma u16     -> 0
- // [48..50] rssi i16
- // [50..54] snr f32
- // [54..58] packet_count u32
- // [58..60] CRC16-Modbus LE sobre bytes [0..58)
+ /*********** Emisión TD 60 bytes (igual que antes) ***********/
+ // Layout EXACTO (little-endian) que Rust espera:
+ // [0] 'T' [1] 'D' [2] version u8=1 [3] reserved u8=0
+ // [4..20] id[16] ASCII null-terminated (id decimal)
+ // [20..24] timestamp u32 (s)
+ // [24..28] lat f32 [28..32] lon f32 [32..36] alt f32
+ // [36..38] rpm i16
+ // [38..44] ax/ay/az i16 (centi-g = g*100)
+ // [44..46] voltage_mv u16 [46..48] current_ma u16
+ // [48..50] rssi i16 [50..54] snr f32 [54..58] packet_count u32
+ // [58..60] CRC16 Modbus LE sobre [0..58)
  static void emitBinaryFrame(const DecodedFrame& f, uint32_t pktCount, int rssi, float snr){
    uint8_t b[60]; memset(b, 0, sizeof(b));
    b[0] = 'T'; b[1] = 'D';
@@ -203,7 +202,7 @@
    int16_t rpm = 0;
    memcpy(&b[36], &rpm, 2);
  
-   // ax/ay/az i16 -> escalamos g * 100 (centi-g)
+   // ax/ay/az i16 -> g * 100 (centi-g)
    auto to_i16_centi_g = [](float g)->int16_t{
      float v = g * 100.0f;
      if(v > 32767.0f) v = 32767.0f;
@@ -239,12 +238,47 @@
    // Emitir por serial (binario)
    Serial.write(b, sizeof(b));
  }
- /*********** ===== FIN AÑADIDO ===== ***********/
  
+ /*********** Helpers solo para modo FAKE ***********/
+ static inline float frand(float a, float b){
+   return a + (b - a) * (random(0L, 10000L) / 10000.0f);
+ }
+ static DecodedFrame makeFakeFrame(){
+   DecodedFrame f{};
+   f.ok = true;
+   f.id = 123; // o el que quieras
+   f.t_s = millis()/1000;
+ 
+   float base_lat = (float)ORIGIN_LAT;
+   float base_lon = (float)ORIGIN_LON;
+   f.lat = base_lat + frand(-0.0005f, 0.0005f);
+   f.lon = base_lon + frand(-0.0005f, 0.0005f);
+ 
+   f.ax_g = frand(-0.30f, 0.30f);
+   f.ay_g = frand(-0.30f, 0.30f);
+   f.az_g = frand(0.95f, 1.05f);
+ 
+   f.gx_dps = frand(-5.0f, 5.0f);
+   f.gy_dps = frand(-5.0f, 5.0f);
+   f.gz_dps = frand(-5.0f, 5.0f);
+ 
+   f.vel_kmh = frand(0.0f, 30.0f);
+   f.sat = true;
+   return f;
+ }
+ 
+ /*********** Setup ***********/
  void setup(){
    Serial.begin(SERIAL_BAUD);
    waitSerialReady();
+   randomSeed((uint32_t)micros());
  
+ #if ENABLE_FAKE_INPUT
+   Serial.println("\n====================================");
+   Serial.println("TEST_1_v3_RX (FAKE MODE: inyectando TD por Serial)");
+   Serial.print("Reset reason: "); Serial.println(resetReasonToStr(esp_reset_reason()));
+   Serial.println("No se inicializa LoRa en modo FAKE.\n");
+ #else
    Serial.println("\n====================================");
    Serial.println("TEST_1_v3_RX (ESP32-C3 + RFM95CW)");
    Serial.print("Reset reason: "); Serial.println(resetReasonToStr(esp_reset_reason()));
@@ -269,12 +303,28 @@
    LoRa.setTxPower(TX_POWER_DBM);
  
    LoRa.receive(); // entrar en RX continuo
- 
    printRadioConfig();
    g_lastRxMs = millis();
+ #endif
  }
  
+ /*********** Loop ***********/
  void loop(){
+ #if ENABLE_FAKE_INPUT
+   // Genera y emite frame TD fake por Serial cada 2 s
+   DecodedFrame f = makeFakeFrame();
+   uint32_t pktNo = g_pktCount++;
+   int   rssi = (int)lroundf(frand(-90.0f, -60.0f));
+   float snr  = frand(-5.0f, 10.0f);
+ 
+   Serial.print("[FAKE] TX #"); Serial.print(pktNo);
+   Serial.print(" RSSI="); Serial.print(rssi);
+   Serial.print(" SNR="); Serial.println(snr, 2);
+ 
+   emitBinaryFrame(f, pktNo, rssi, snr);
+   delay(2000);
+ #else
+   // Modo receptor como antes
    int packetSize = LoRa.parsePacket();
    if(packetSize){
      uint8_t buf[RX_BUF_MAX]; int n=0;
@@ -308,10 +358,8 @@
        Serial.print("Vel: "); Serial.print(f.vel_kmh,2); Serial.println(" km/h");
        Serial.print("SatFlag: "); Serial.println(f.sat ? "YES":"NO");
  
-       /* ===== AÑADIDO: emitir frame binario (60 bytes TD + CRC) ===== */
+       // Emitir frame binario TD (60 bytes + CRC) por Serial
        emitBinaryFrame(f, g_pktCount, rssi, snr);
-       /* ===== FIN AÑADIDO ===== */
- 
      } else {
        Serial.println("❌ Error: tamaño de paquete invalido");
      }
@@ -324,5 +372,6 @@
      g_lastRxMs = millis();
      Serial.println("[RX] Escuchando... (RX continuo, esperando paquetes)");
    }
+ #endif
  }
  
