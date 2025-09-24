@@ -68,8 +68,7 @@
  
  /*********** Función de decodificación ***********/
  static DecodedFrame decodeV3(const uint8_t* p, int n){
-   DecodedFrame out{};
-   out.ok = false;
+   DecodedFrame out{}; out.ok = false;
    if(n != PAYLOAD_LEN) return out;
  
    BitReader br; br.init(p,n);
@@ -147,6 +146,101 @@
    Serial.println("Modo: RX continuo. Esperando paquetes...\n");
  }
  
+ /*********** ===== AÑADIDO: Emisión binaria TD (60 bytes + CRC) ===== ***********/
+ static uint16_t crc16_modbus(const uint8_t* data, size_t n){
+   uint16_t crc = 0xFFFF;
+   for(size_t i=0;i<n;i++){
+     crc ^= data[i];
+     for(int b=0;b<8;b++){
+       if(crc & 1) crc = (crc >> 1) ^ 0xA001;
+       else        crc = (crc >> 1);
+     }
+   }
+   return crc;
+ }
+ 
+ // Layout EXACTO (little-endian) que tu Rust ya espera:
+ // [0] 'T'  [1] 'D'
+ // [2] version (u8)      -> 1
+ // [3] reserved (u8)     -> 0
+ // [4..20] id[16] ASCII null-terminated (tu id decimal)
+ // [20..24] timestamp u32 (s)  -> usamos millis()/1000
+ // [24..28] latitude f32
+ // [28..32] longitude f32
+ // [32..36] altitude f32       -> 0.0
+ // [36..38] rpm i16            -> 0
+ // [38..40] ax i16             -> int16 de ax_g * 100 (centi-g)
+ // [40..42] ay i16             -> int16 de ay_g * 100
+ // [42..44] az i16             -> int16 de az_g * 100
+ // [44..46] voltage_mv u16     -> 0
+ // [46..48] current_ma u16     -> 0
+ // [48..50] rssi i16
+ // [50..54] snr f32
+ // [54..58] packet_count u32
+ // [58..60] CRC16-Modbus LE sobre bytes [0..58)
+ static void emitBinaryFrame(const DecodedFrame& f, uint32_t pktCount, int rssi, float snr){
+   uint8_t b[60]; memset(b, 0, sizeof(b));
+   b[0] = 'T'; b[1] = 'D';
+   b[2] = 1;   b[3] = 0;
+ 
+   // id ASCII (hasta 16 bytes, null-terminated)
+   char idStr[17]; snprintf(idStr, sizeof(idStr), "%u", (unsigned)f.id);
+   for(int i=0;i<16;i++){ b[4+i] = (uint8_t)idStr[i]; if(idStr[i]==0) break; }
+ 
+   // timestamp (s) - receptor
+   uint32_t ts = millis()/1000;
+   memcpy(&b[20], &ts, 4);
+ 
+   // lat/lon/alt f32 (LE)
+   float lat = (float)f.lat;
+   float lon = (float)f.lon;
+   float alt = 0.0f;
+   memcpy(&b[24], &lat, 4);
+   memcpy(&b[28], &lon, 4);
+   memcpy(&b[32], &alt, 4);
+ 
+   // rpm i16 -> 0
+   int16_t rpm = 0;
+   memcpy(&b[36], &rpm, 2);
+ 
+   // ax/ay/az i16 -> escalamos g * 100 (centi-g)
+   auto to_i16_centi_g = [](float g)->int16_t{
+     float v = g * 100.0f;
+     if(v > 32767.0f) v = 32767.0f;
+     if(v < -32768.0f) v = -32768.0f;
+     return (int16_t)lrintf(v);
+   };
+   int16_t ax = to_i16_centi_g(f.ax_g);
+   int16_t ay = to_i16_centi_g(f.ay_g);
+   int16_t az = to_i16_centi_g(f.az_g);
+   memcpy(&b[38], &ax, 2);
+   memcpy(&b[40], &ay, 2);
+   memcpy(&b[42], &az, 2);
+ 
+   // voltaje/corriente -> 0
+   uint16_t mv = 0, ma = 0;
+   memcpy(&b[44], &mv, 2);
+   memcpy(&b[46], &ma, 2);
+ 
+   // rssi i16
+   int16_t rssi_i16 = (int16_t)rssi;
+   memcpy(&b[48], &rssi_i16, 2);
+ 
+   // snr f32
+   memcpy(&b[50], &snr, 4);
+ 
+   // packet_count u32
+   memcpy(&b[54], &pktCount, 4);
+ 
+   // CRC16-Modbus (LE) sobre [0..58)
+   uint16_t crc = crc16_modbus(b, 58);
+   memcpy(&b[58], &crc, 2);
+ 
+   // Emitir por serial (binario)
+   Serial.write(b, sizeof(b));
+ }
+ /*********** ===== FIN AÑADIDO ===== ***********/
+ 
  void setup(){
    Serial.begin(SERIAL_BAUD);
    waitSerialReady();
@@ -213,6 +307,11 @@
        Serial.print(" gz="); Serial.println(f.gz_dps,2);
        Serial.print("Vel: "); Serial.print(f.vel_kmh,2); Serial.println(" km/h");
        Serial.print("SatFlag: "); Serial.println(f.sat ? "YES":"NO");
+ 
+       /* ===== AÑADIDO: emitir frame binario (60 bytes TD + CRC) ===== */
+       emitBinaryFrame(f, g_pktCount, rssi, snr);
+       /* ===== FIN AÑADIDO ===== */
+ 
      } else {
        Serial.println("❌ Error: tamaño de paquete invalido");
      }
