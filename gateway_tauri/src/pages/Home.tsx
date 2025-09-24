@@ -2,7 +2,6 @@ import {useState, useEffect} from "react"
 import TrackVisualization from "../components/TrackVisualization"
 import LapTimeChart from "../components/charts/LapTimeChart"
 import BatteryChart from "../components/charts/BatteryChart"
-import DemoButtons from "../components/DemoButtons"
 import {useTauri} from "../core/tauri/TauriProvider"
 
 interface ExpandedTelemetryData {
@@ -253,7 +252,9 @@ export default function TelemetryDashboard() {
           <div className="animate-pulse text-4xl mb-4">◉ TELEMETRY SYSTEM</div>
           <div className="text-sm mb-2">AWAITING SIGNAL...</div>
         </div>
-        <DemoButtons />
+        <button onClick={() => t.openPort(t.ports[0])} className="px-3 py-1 border">
+          Connect
+        </button>
       </div>
     )
   }
@@ -463,8 +464,6 @@ export default function TelemetryDashboard() {
           )}
         </div>
       </div>
-
-      <DemoButtons />
     </div>
   )
 }

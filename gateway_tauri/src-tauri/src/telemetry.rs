@@ -1,32 +1,44 @@
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
+use log::{info, warn, error, debug};
 
 #[derive(Clone, Serialize, Default, Debug)]
 pub struct Telemetry {
   pub version: u8,
   pub reserved: u8,
-  pub timestamp: u32,         // viene como uint32 (Unix s)
-  pub id: String,             // id[16] ASCII
+  pub timestamp: u32,  
+  pub id: String,            
   pub latitude: f32,
   pub longitude: f32,
   pub altitude: f32,
   pub rpm: i16,
   pub ax: i16, pub ay: i16, pub az: i16,
-  pub voltage_mv: u16,        // mV
-  pub current_ma: u16,        // mA
-  pub rssi: i16,              // dBm
-  pub snr: f32,               // dB
+  pub voltage_mv: u16,      
+  pub current_ma: u16,       
+  pub rssi: i16,              
+  pub snr: f32,               
   pub packet_count: u32,
 }
 
 pub fn now_seconds() -> u32 {
-  SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32
+  let seconds = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32;
+  debug!("Current timestamp: {}", seconds);
+  seconds
 }
 
 
 pub fn decode_frame(frame: &[u8]) -> Option<Telemetry> {
-  if frame.len() != 60 { return None; }
-  if frame[0] != b'T' || frame[1] != b'D' { return None; }
+  debug!("Attempting to decode frame of {} bytes", frame.len());
+  
+  if frame.len() != 60 { 
+    warn!("Invalid frame length: {} (expected 60)", frame.len());
+    return None; 
+  }
+  
+  if frame[0] != b'T' || frame[1] != b'D' { 
+    warn!("Invalid frame header: [{}, {}] (expected [T, D])", frame[0], frame[1]);
+    return None; 
+  }
 
   // ayuda para leer
   let le_u16 = |i| u16::from_le_bytes([frame[i], frame[i+1]]);
@@ -57,15 +69,23 @@ pub fn decode_frame(frame: &[u8]) -> Option<Telemetry> {
   let packet_count= le_u32(54);
   // CRC (bytes 58..60) ya verificado en serial.rs
 
-  Some(Telemetry{
-    version, reserved, id, timestamp,
+  let telemetry = Telemetry{
+    version, reserved, id: id.clone(), timestamp,
     latitude, longitude, altitude,
     rpm, ax, ay, az,
     voltage_mv, current_ma, rssi, snr, packet_count
-  })
+  };
+  
+  debug!("Successfully decoded telemetry: ID={}, lat={:.6}, lon={:.6}, alt={:.2}, rpm={}, packet_count={}", 
+         id, latitude, longitude, altitude, rpm, packet_count);
+  
+  Some(telemetry)
 }
 
 pub fn encode_frame(t: &Telemetry, magic: [u8;2], use_crc: bool, frame_size: usize) -> Vec<u8> {
+  debug!("Encoding telemetry frame: ID={}, magic=[{}, {}], use_crc={}, frame_size={}", 
+         t.id, magic[0], magic[1], use_crc, frame_size);
+  
   let mut b = Vec::<u8>::with_capacity(frame_size);
   b.push(magic[0]); b.push(magic[1]);
   b.push(t.version); b.push(t.reserved);
@@ -93,13 +113,21 @@ pub fn encode_frame(t: &Telemetry, magic: [u8;2], use_crc: bool, frame_size: usi
 
   if use_crc {
     let crc = crc16_modbus(&b);
+    debug!("Calculated CRC: {}", crc);
     b.extend_from_slice(&crc.to_le_bytes());
   }
-  if b.len() < frame_size { b.resize(frame_size, 0); }
+  
+  if b.len() < frame_size { 
+    debug!("Padding frame from {} to {} bytes", b.len(), frame_size);
+    b.resize(frame_size, 0); 
+  }
+  
+  debug!("Encoded frame: {} bytes", b.len());
   b
 }
 
 pub fn crc16_modbus(data: &[u8]) -> u16 {
+  debug!("Calculating CRC16-Modbus for {} bytes", data.len());
   let mut crc: u16 = 0xFFFF;
   for &b in data {
     crc ^= b as u16;
@@ -107,5 +135,6 @@ pub fn crc16_modbus(data: &[u8]) -> u16 {
       crc = if (crc & 1) != 0 { (crc >> 1) ^ 0xA001 } else { crc >> 1 };
     }
   }
+  debug!("CRC16-Modbus result: {}", crc);
   crc
 }
