@@ -389,16 +389,6 @@ export default function TelemetryDashboard() {
 
         {/* --- RIGHT COLUMN: Systems & Health --- */}
         <div className="lg:col-span-1 space-y-6">
-          {t.isTauri && (
-            <button
-              onClick={() => t.ports[0] && t.openPort(t.ports[0])}
-              disabled={!t.ports.length || t.open}
-              className="px-3 py-1 border"
-            >
-              {t.open ? "Connected" : t.ports[0] ? `Connect ${t.ports[0]}` : "No ports"}
-            </button>
-          )}
-
           <button
             onClick={() => setTechnicianMode(!technicianMode)}
             className={`w-full px-4 py-2 border-2 text-sm font-bold ${

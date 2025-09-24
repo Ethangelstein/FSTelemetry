@@ -3,6 +3,7 @@
  * - Siempre imprime “LoRa inicializado” al boot/reset
  * - RX continuo
  * - Decodificación del payload binario v3 (18 bytes)
+ * - Opción FAKE: inyecta frames TD (60B) por USB/Serial
  ****************************************************/
 
  #include <Arduino.h>
@@ -13,7 +14,7 @@
  #include "esp_system.h"
  
  /*********** FLAGS ***********/
- #define ENABLE_FAKE_INPUT  0
+ #define ENABLE_FAKE_INPUT  1   // 1 = FAKE por Serial, 0 = RX LoRa
  
  /*********** Pines ***********/
  #define LORA_SS   5
@@ -73,7 +74,7 @@
    bool ok;
  };
  
- /*********** Función de decodificación ***********/
+ /*********** Decodificación payload v3 (18 bytes) ***********/
  static DecodedFrame decodeV3(const uint8_t* p, int n){
    DecodedFrame out{}; out.ok = false;
    if(n != PAYLOAD_LEN) return out;
@@ -166,17 +167,21 @@
    return crc;
  }
  
- /*********** Emisión TD 60 bytes (igual que antes) ***********/
- // Layout EXACTO (little-endian) que Rust espera:
- // [0] 'T' [1] 'D' [2] version u8=1 [3] reserved u8=0
- // [4..20] id[16] ASCII null-terminated (id decimal)
- // [20..24] timestamp u32 (s)
- // [24..28] lat f32 [28..32] lon f32 [32..36] alt f32
- // [36..38] rpm i16
- // [38..44] ax/ay/az i16 (centi-g = g*100)
- // [44..46] voltage_mv u16 [46..48] current_ma u16
- // [48..50] rssi i16 [50..54] snr f32 [54..58] packet_count u32
- // [58..60] CRC16 Modbus LE sobre [0..58)
+ /*********** Emisión TD 60 bytes (formato Rust) ***********/
+ /*
+ Layout EXACTO (little-endian):
+ [0] 'T' [1] 'D' [2] version u8=1 [3] reserved u8=0
+ [4..20] id[16] ASCII null-terminated (id decimal)
+ [20..24] timestamp u32 (s)
+ [24..28] lat f32 [28..32] lon f32 [32..36] alt f32
+ [36..38] rpm i16
+ [38..42] ax i16 (mg) [40..42] ay i16 (mg) [42..44] az i16 (mg)
+ [44..46] voltage_mv u16 [46..48] current_ma u16
+ [48..50] rssi i16
+ [50..54] snr f32
+ [54..58] packet_count u32
+ [58..60] CRC16 Modbus LE sobre [0..58)
+ */
  static void emitBinaryFrame(const DecodedFrame& f, uint32_t pktCount, int rssi, float snr){
    uint8_t b[60]; memset(b, 0, sizeof(b));
    b[0] = 'T'; b[1] = 'D';
@@ -193,31 +198,43 @@
    // lat/lon/alt f32 (LE)
    float lat = (float)f.lat;
    float lon = (float)f.lon;
-   float alt = 0.0f;
+ 
+   // Valores realistas en FAKE
+   #if ENABLE_FAKE_INPUT
+     float    alt = (float)(20.0f + (random(0L,1000L)/1000.0f)*15.0f);   // 20..35 m
+     int16_t  rpm = (int16_t)lroundf(900.0f + (random(0L,1000L)/1000.0f)*1300.0f); // 900..2200
+     uint16_t mv  = (uint16_t)lroundf(11500.0f + (random(0L,1000L)/1000.0f)*1000.0f); // 11.5..12.5 V
+     uint16_t ma  = (uint16_t)lroundf(500.0f + (random(0L,1000L)/1000.0f)*1500.0f);   // 0.5..2 A
+   #else
+     float    alt = 0.0f;
+     int16_t  rpm = 0;
+     uint16_t mv  = 0, ma = 0;
+   #endif
+ 
    memcpy(&b[24], &lat, 4);
    memcpy(&b[28], &lon, 4);
    memcpy(&b[32], &alt, 4);
  
-   // rpm i16 -> 0
-   int16_t rpm = 0;
-   memcpy(&b[36], &rpm, 2);
- 
-   // ax/ay/az i16 -> g * 100 (centi-g)
-   auto to_i16_centi_g = [](float g)->int16_t{
-     float v = g * 100.0f;
-     if(v > 32767.0f) v = 32767.0f;
-     if(v < -32768.0f) v = -32768.0f;
+   // ax/ay/az i16 -> mg (g * 1000)
+   auto to_i16_mg = [](float g)->int16_t{
+     float v = g * 1000.0f;
+     if (v > 32767.0f) v = 32767.0f;
+     if (v < -32768.0f) v = -32768.0f;
      return (int16_t)lrintf(v);
    };
-   int16_t ax = to_i16_centi_g(f.ax_g);
-   int16_t ay = to_i16_centi_g(f.ay_g);
-   int16_t az = to_i16_centi_g(f.az_g);
+   int16_t ax = to_i16_mg(f.ax_g);
+   int16_t ay = to_i16_mg(f.ay_g);
+   int16_t az = to_i16_mg(f.az_g);
+ 
+   // rpm
+   memcpy(&b[36], &rpm, 2);
+ 
+   // accel (mg)
    memcpy(&b[38], &ax, 2);
    memcpy(&b[40], &ay, 2);
    memcpy(&b[42], &az, 2);
  
-   // voltaje/corriente -> 0
-   uint16_t mv = 0, ma = 0;
+   // voltaje/corriente
    memcpy(&b[44], &mv, 2);
    memcpy(&b[46], &ma, 2);
  
@@ -239,7 +256,7 @@
    Serial.write(b, sizeof(b));
  }
  
- /*********** Helpers solo para modo FAKE ***********/
+ /*********** Helpers FAKE ***********/
  static inline float frand(float a, float b){
    return a + (b - a) * (random(0L, 10000L) / 10000.0f);
  }
@@ -324,7 +341,7 @@
    emitBinaryFrame(f, pktNo, rssi, snr);
    delay(2000);
  #else
-   // Modo receptor como antes
+   // Modo receptor clásico
    int packetSize = LoRa.parsePacket();
    if(packetSize){
      uint8_t buf[RX_BUF_MAX]; int n=0;
@@ -358,7 +375,7 @@
        Serial.print("Vel: "); Serial.print(f.vel_kmh,2); Serial.println(" km/h");
        Serial.print("SatFlag: "); Serial.println(f.sat ? "YES":"NO");
  
-       // Emitir frame binario TD (60 bytes + CRC) por Serial
+       // Re-emite como frame TD (60 bytes + CRC) por Serial
        emitBinaryFrame(f, g_pktCount, rssi, snr);
      } else {
        Serial.println("❌ Error: tamaño de paquete invalido");
