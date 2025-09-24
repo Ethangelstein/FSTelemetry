@@ -252,9 +252,6 @@ export default function TelemetryDashboard() {
           <div className="animate-pulse text-4xl mb-4">◉ TELEMETRY SYSTEM</div>
           <div className="text-sm mb-2">AWAITING SIGNAL...</div>
         </div>
-        <button onClick={() => t.openPort(t.ports[0])} className="px-3 py-1 border">
-          Connect
-        </button>
       </div>
     )
   }
