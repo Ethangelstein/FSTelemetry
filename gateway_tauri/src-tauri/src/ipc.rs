@@ -1,4 +1,3 @@
-// src-tauri/src/ipc.rs
 use tauri::{AppHandle, Emitter};
 use std::sync::{Arc, Mutex};
 use tokio::{io::split, sync::mpsc};
