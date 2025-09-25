@@ -18,14 +18,13 @@ fn main() {
     .invoke_handler(tauri::generate_handler![
       ipc::list_ports,
       ipc::open_port,
-      ipc::write_bytes,
       ipc::close_port
     ])
     .setup(|app| {
       let app_handle = app.handle().clone();
       let state_arc = app.state::<Arc<Mutex<serial::SerialState>>>().inner().clone();
-      tauri::async_runtime::spawn(async move {
-        let _ = ipc::auto_open_first_with(app_handle, state_arc).await;
+      std::thread::spawn(move || {
+        let _ = ipc::auto_open_first_with(app_handle, state_arc);
       });
       Ok(())
     })
